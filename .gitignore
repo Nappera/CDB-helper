@@ -1,0 +1,58 @@
+# Qt Creator / Visual Studio 本机配置
+.qtcreator/
+.vs/
+*.user
+*.user.*
+*.suo
+
+# 构建目录（包含便携 Release，发布文件不进入源码仓库）
+/build/
+/build-*/
+/cmake-build-*/
+/Debug/
+/Release/
+
+# CMake / Ninja 在源码目录生成的文件
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+build.ninja
+rules.ninja
+.ninja_deps
+.ninja_log
+compile_commands.json
+*_autogen/
+
+# 编译产物与调试符号
+*.obj
+*.o
+*.pch
+*.pdb
+*.ilk
+*.idb
+*.exp
+*.tlog/
+*.vcxproj
+*.vcxproj.filters
+*.sln
+
+# 现场证据、日志与历史备份（可能包含敏感内存）
+/sessions/
+/backup/
+/dumps/
+*.dmp
+*.mdmp
+*.log
+
+# 手工下载的第三方工具二进制不提交，说明和许可证可保留
+/thirdparty/**/*.exe
+/thirdparty/**/*.dll
+/thirdparty/**/*.zip
+
+# 系统临时文件
+Thumbs.db
+Desktop.ini
+.DS_Store
+*.tmp

@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Release 调试助手 - 使用说明</title>
+  <style>
+    :root { color-scheme: light; font-family: "Microsoft YaHei UI", "Microsoft YaHei", sans-serif; color: #16212a; background: #f4f7f8; }
+    body { max-width: 980px; margin: 0 auto; padding: 32px 24px 56px; line-height: 1.75; }
+    header { border-left: 6px solid #087e8b; padding: 4px 0 4px 18px; margin-bottom: 28px; }
+    h1 { margin: 0; font-size: 30px; } h2 { margin-top: 34px; color: #075b66; border-bottom: 1px solid #d4e2e4; padding-bottom: 6px; }
+    h3 { margin-top: 22px; } .lead { color: #52616b; margin: 6px 0 0; }
+    .card, .notice { background: white; border-radius: 8px; padding: 18px 20px; margin: 16px 0; box-shadow: 0 1px 2px #1e3a4210; }
+    .notice { border-left: 4px solid #d18b22; background: #fffaf0; }
+    .safe { border-left-color: #087e8b; background: #f0fbfb; }
+    code, .path { font-family: Consolas, "Cascadia Mono", monospace; background: #edf2f3; padding: 2px 5px; border-radius: 3px; word-break: break-all; }
+    li { margin: 7px 0; } table { width: 100%; border-collapse: collapse; background: white; } th, td { border: 1px solid #d5dee1; padding: 10px; text-align: left; vertical-align: top; } th { background: #eaf5f6; width: 26%; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Release 调试助手</h1>
+    <p class="lead">用于复现和保存任意 Windows 程序的 Release 闪退、内存持续增长、句柄增长与异常退出证据。</p>
+  </header>
+
+  <section class="card safe">
+    <strong>先理解边界：</strong>普通监视只读取目标进程的公开计数器，不会注入 DLL、不会修改程序，也不会在“停止监视”时强制关闭目标。工具给出的“疑似增长”是复现期间的证据提示，不等同于已经证明内存泄漏。
+  </section>
+
+  <h2>1. 最快使用方式</h2>
+  <ol>
+    <li>启动 <code>release_debug_studio.exe</code>。</li>
+    <li>在“目标 EXE”选择要诊断的 Release 程序；如有启动参数，填入“参数”。</li>
+    <li>确认“会话输出目录”。每次运行会自动建立一个带时间戳的独立子目录。</li>
+    <li>采样间隔建议先用 <code>500 ms</code>；复现很快的闪退时可降低到 <code>200 ms</code>。</li>
+    <li>点击“启动并监视”，在被测程序中复现问题。</li>
+    <li>进程退出或点击“停止监视”后，右侧结论区会显示采样、异常事件和增长规则的结果；点击“打开最近会话”可查看完整证据。</li>
+  </ol>
+
+  <h2>2. 已经运行的程序：附加 PID</h2>
+  <ol>
+    <li>在任务管理器“详细信息”页找到目标程序的 PID。</li>
+    <li>填入“附加 PID”，点击“附加并监视”。</li>
+    <li>若提示没有权限，请以管理员身份启动本工具；不要因为权限不足而直接把结果理解为“没有问题”。</li>
+  </ol>
+
+  <h2>3. 界面怎样解读</h2>
+  <table>
+    <tr><th>私有内存</th><td>目标进程提交的私有内存趋势。连续增加且本次采集的总增量达到规则阈值时，工具提示“疑似持续增长”。</td></tr>
+    <tr><th>工作集</th><td>当前驻留在物理内存中的部分；会受系统换页影响，不能单独当作泄漏结论。</td></tr>
+    <tr><th>句柄 / 线程</th><td>用于发现未关闭句柄、反复创建线程等线索。趋势只是定位入口，仍需结合代码和调用栈确认。</td></tr>
+    <tr><th>事件与结论</th><td>会话结束时读取开始时间之后的 Application Error / Windows Error Reporting 事件，并将规则结论显示出来。</td></tr>
+  </table>
+
+  <h2>4. 会话目录中有什么</h2>
+  <div class="card">
+    <ul>
+      <li><code>samples.csv</code>：每一采样点的私有内存、工作集、句柄、线程与 CPU 数据；可用 Excel 打开。</li>
+      <li><code>session.json</code>：目标、PID、时间、退出码、结论与 dump 清单。</li>
+      <li><code>events.xml</code>：会话期间获取到的 Windows 应用错误事件 XML。</li>
+      <li><code>report.html</code>：可直接发送或离线打开的简要报告。</li>
+      <li><code>dumps/</code>：仅在启用 ProcDump 且实际捕获成功时出现 <code>.dmp</code>。</li>
+    </ul>
+  </div>
+
+  <h2>5. 闪退且需要调用栈：可选 ProcDump</h2>
+  <ol>
+    <li>自行准备 Microsoft Sysinternals 的 <code>procdump.exe</code>，在“ProcDump 路径”选择该文件。</li>
+    <li>勾选“异常时捕获完整 Dump”，再启动或附加监视。</li>
+    <li>工具会启动等价于 <code>procdump -accepteula -ma -e &lt;PID&gt; &lt;dumps目录&gt;</code> 的独立进程；它会在未处理异常时尝试保存完整 dump。</li>
+    <li>用 WinDbg 打开 dump，先执行 <code>.symfix; .reload; !analyze -v; kb</code>。有私有 PDB 时，在符号路径中加入其目录后再 <code>.reload</code>。</li>
+  </ol>
+  <div class="notice"><strong>磁盘提醒：</strong>完整 dump 可能接近目标进程的内存大小。复现前请确认输出磁盘空间，并避免把包含敏感内存的 dump 外发。</div>
+
+  <h2>6. 自动采集异常调用栈（CDB）</h2>
+  <div class="card">
+    <ol>
+      <li>在“高级诊断”勾选<strong>异常时自动采集调用栈（CDB，复现诊断用）</strong>。</li>
+      <li>工具会自动寻找 Windows SDK 的 <code>cdb.exe</code>；找不到时点击“选择 CDB”手工指定。</li>
+      <li>该模式由 CDB 启动目标程序，因此仅适用于“启动并监视”，不能附加已有 PID；它用于复现异常，默认关闭。</li>
+      <li>会话结束后，右侧结论和 <code>report.html</code> 会显示异常码、模块和最多 20 条调用栈；完整原始输出在 <code>cdb.log</code>。</li>
+    </ol>
+    <div class="notice">没有私有 PDB 时，调用栈可能只有 DLL/函数名或地址；这不代表采集失败。普通监视模式不依赖 CDB，也不会改变。</div>
+  </div>
+
+  <h2>7. 怀疑堆越界：可选 PageHeap</h2>
+  <ol>
+    <li>选择 Windows Debugging Tools 中的 <code>gflags.exe</code>。</li>
+    <li>先关闭被测程序，在目标 EXE 已选中的情况下点击“启用 PageHeap”。工具会展示并以 UAC 管理员权限执行对应的 <code>gflags /p /enable &lt;exe&gt; /full</code>。</li>
+    <li>重新启动被测程序复现。PageHeap 会改变分配行为、显著降低性能并增加内存使用，但更容易让越界在靠近发生点的位置崩溃。</li>
+    <li>采集完成后务必点击“禁用 PageHeap”，等价于 <code>gflags /p /disable &lt;exe&gt;</code>，然后再次启动目标程序才会恢复正常分配行为。</li>
+  </ol>
+  <div class="notice"><strong>不要把 PageHeap 当作常规运行模式。</strong>它按 EXE 文件名对系统生效，启用后所有同名进程都会受影响；请只在可控复现场景中短时间使用。</div>
+
+  <h2>8. 建议的定位顺序</h2>
+  <ol>
+    <li>先不开 ProcDump/PageHeap，连续复现 2～3 次，确认内存、句柄、线程趋势是否一致。</li>
+    <li>若是直接闪退，开启 ProcDump，优先从 <code>!analyze -v</code>、异常模块和调用栈确定第一落点。</li>
+    <li>若是疑似堆损坏或“崩在不相关位置”，再短时启用 PageHeap 复现并采集 dump。</li>
+    <li>将 <code>report.html</code>、<code>samples.csv</code>、异常事件与有符号调用栈放在一起判断；单个计数器或单次崩溃不足以下确定根因。</li>
+  </ol>
+</body>
+</html>

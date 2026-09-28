@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<help version="1">
+  <section title="便携使用：整目录拷贝">
+    <p>将完整 Release 文件夹复制到 Windows 10/11 x64 的可写目录，运行 release_debug_studio.exe。无需安装 Qt Creator、Visual Studio 或完整 Windows SDK。Qt 与 MSVC DLL 在程序旁，CDB、ProcDump、gflags 在 thirdparty 中。</p>
+    <p>助手优先使用自带的工具，日志默认保存在程序旁的 sessions。目标程序自身依赖仍需另外准备；目标 PDB 不属于助手环境。</p>
+    <p>此包面向自用现场诊断，保留第三方许可；ProcDump 不得作为产品组件再分发。完整 dump 可能较大，取证前确保空间充足。</p>
+  </section>
+  <section title="1. 闪退、程序突然消失、没有 dump">
+    <p>推荐：诊断方式选择“抓闪退（CDB）”；如果是突然消失或没有 dump，再勾选“追踪直接退出”。三种诊断方式互斥，只显示当前方式的设置。</p>
+    <p>步骤：关闭原单实例程序 → 选择实际使用的 EXE → 自动查找 CDB → 填匹配的 PDB 目录（可留空）→ 启动并监视 → 确认时间线提示 CDB 已启动、会话目录有 cdb.log → 再复现。</p>
+    <p>切换工程前，在“标记步骤”写下“第几次、从哪个工程切到哪个工程”。偶发问题可以持续监视，不要求每次复现。</p>
+    <p>闪退后等现场写入结束，再打开最近会话目录。保留整个目录及目标程序同一时段日志。写 dump 时不要停止监视或关闭助手。</p>
+    <p>正常关闭也可能保存退出路径，不等于崩溃。外部强杀不保证能得到退出前调用栈，也不能据此确定是谁结束了进程。</p>
+  </section>
+  <section title="2. 程序已运行，不方便重新启动">
+    <p>在任务管理器“详细信息”找到 PID → 填“附加 PID” → 点击“附加 PID”。普通监视不用选择 EXE。</p>
+    <p>如需异常 dump，先选择“抓 dump（ProcDump）”并指定工具路径，再附加；检查 procdump.log 确认附加结果。本助手的 CDB 模式只支持从助手启动目标。</p>
+  </section>
+  <section title="3. 内存、句柄或线程持续增长">
+    <p>选择“仅资源监视”，采样保持 1000 ms。重复相同操作，标记开始和结束，观察私有内存、句柄数、线程数能否回落。</p>
+    <p>私有内存：进程私有提交量；工作集：当前驻留物理内存，受系统回收影响。曲线增长只能提示排查方向，不能单凭它认定泄漏。</p>
+    <p>停止监视后保留 samples.csv、markers.csv、report.html。停止监视不是关闭目标程序。</p>
+  </section>
+  <section title="4. 怀疑堆越界或释放后使用">
+    <p>普通异常栈难以定位时，再考虑 PageHeap，不是第一次抓闪退的必选项。</p>
+    <p>展开“内存越界诊断（高级）” → 选择目标 EXE 和 gflags → 启用 PageHeap（需管理员权限）→ 完整重启目标，配合 CDB 复现。内存和运行耗时会明显增加。</p>
+    <p>测试完必须点击“关闭 PageHeap”，再重启目标。配置针对 EXE 文件名持续生效；折叠面板或关闭助手不会自动撤销。不要在生产运行时随意开启。</p>
+  </section>
+  <section title="5. PDB 怎么填">
+    <p>填与运行版本的 EXE/DLL 配套的 PDB 所在文件夹，不是文件名；多个目录用分号分隔。留空默认搜索 EXE 目录。</p>
+    <p>PDB 是编译产物，不是 dump 生成的。没有 PDB 也可抓现场，但函数和源码定位能力受限。部分模块加载符号不代表所有模块都匹配。</p>
+    <p>每次发布单独保留 EXE、自己的 DLL、PDB 和源码版本。重新编译后的 PDB 不应代替旧版本对应文件。</p>
+  </section>
+  <section title="6. 读现场：先报告，再原始日志">
+    <p>① report.html：先看异常、退出路径、dump 是否成功等摘要。摘要用于导航，不直接当作根因。</p>
+    <p>② session.json：查看 stackCapture。requested=true 表示请求了 CDB；debuggerStarted=true 表示调试器启动；exceptionObserved=true 表示解析到异常。三者含义不同。</p>
+    <p>exceptionCode=0xc0000005 是访问违例，可能涉及无效指针等；仅凭异常码不能判定是哪一个对象。exitCodeKnown=false 或 exitCode=null 表示目标退出码未知，不能拿 debuggerExitCode 代替。</p>
+    <p>③ cdb.log：搜索 ExceptionAddress，查看实际异常地址与函数。示例 Qt5Widgets!QGraphicsView::scene：感叹号前是模块，后面是函数。这是出错位置，不一定是根因。</p>
+    <p>④ 看附近调用栈：上方接近异常位置，下方是调用者。想还原操作顺序时从下往上读。析构函数（~类名、destructor）表示对象正在销毁；lambda 是匿名回调；+0x36 是函数偏移，不是源码行号。</p>
+    <p>⑤ 对照匹配版本源码：检查回调连接、对象生命周期、指针来源。区分“栈里看到了什么”和“推测原因是什么”，不要直接归咎于栈顶的 Qt 或第三方模块。</p>
+  </section>
+  <section title="7. 示例：切换工程时访问违例">
+    <p>一次实际捕获的路径：TaskManager::LoadPrj → MainWindow::on_prjChanged → CustomUiCanvas::fromJsonObject → qDeleteAll → CustomUiView / CustomUiScene / CustomUiItem 析构 → CustomUiDesigner 工具栏 lambda → QGraphicsView::scene。</p>
+    <p>已知：工程加载中删除旧界面时执行到了回调，并在 scene() 中访问违例。待核实：回调是否引用已销毁或正在销毁的视图。需要对照源码确认，不能只靠此栈宣称修复方案。</p>
+  </section>
+  <section title="8. 为什么没有 dump">
+    <p>先看是否真正启用取证。requested=false、没有 cdb.log：这次不是 CDB 取证会话，仅启动资源监视不会自动得到异常调用栈。</p>
+    <p>CDB 模式在 cdb.log 搜索 Dump successfully written 或 Dump creation failed；ProcDump 模式看 procdump.log。工具启动不等于附加成功，也不等于写入成功。</p>
+    <p>例：WriteFullMemory.Memory.Read(...) failed，随后 Win32 error 0n299，表示部分进程内存读取失败，完整 dump 写入中止。0n299 是十进制错误码。这解释本次外部写入失败，不解释其他场景下主程序内部为何没生成 dump。</p>
+    <p>即使 dump 失败，仍保留 cdb.log，其中可能已有有用的调用栈。存在 .dmp 文件也不等于文件完整，要核对成功日志。</p>
+    <p>若目标是已加入诊断日志并重新编译的视觉主程序，查看目标目录 dump/dump_diagnostic_进程号.txt；不可写时尝试系统临时目录。记录包括进入回调、spdlog、dump 创建和写入、原格式 TXT 解析。</p>
+    <p>内部两处都没有记录，不能绝对证明回调没执行，也可能日志写入失败。主动退出或外部终止未必经过异常回调；调试器介入时的处理路径也可能不同。</p>
+  </section>
+  <section title="9. 哪些文件给分析人员">
+    <p>首选整个会话目录：report.html、session.json、cdb.log 或 procdump.log、dumps、samples.csv、markers.csv、events.xml；再附目标程序日志、复现步骤、版本及对应符号。</p>
+    <p>完整 dump 可能很大，并包含图像、密码等敏感内存，只交给可信人员。调试取证会暂停程序并改变时序，未复现不等于问题消失。</p>
+    <p>帮助页按 F1 或“帮助 → 使用指南”打开。文档来自 EXE 同级 help.xml，修改后重新打开帮助即可，无需重新编译。</p>
+  </section>
+</help>
